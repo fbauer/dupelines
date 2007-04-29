@@ -6,33 +6,42 @@ from matplotlib.pylab import plot, show
 import sys
 import optparse
 
-def show_similiarities(filenames):
-    for filename in filenames:
-        f = open(filename, 'r')
-        lines = f.readlines()
-        #lines = f.read()
-        x_positions = []
-        y_positions = []
-        lines_x = []
-        lines_y = []
-        possible_line_continuations = {}
-        for xPos, first_line in enumerate(lines[:-1]):
-            for yPos, second_line in enumerate(lines[xPos+1:]):
-                if first_line == second_line and first_line != '\n':
-                    if (xPos, yPos) in possible_line_continuations:
-                        possible_line_continuations[xPos + 1, yPos + 1] =\
-                        possible_line_continuations.pop((xPos, yPos))
-                    else:
-                        possible_line_continuations[xPos + 1, yPos + 1] = (xPos, yPos)
-                    x_positions.append(xPos)
-                    y_positions.append(yPos)
-        
-        for after_line_end in possible_line_continuations.iterkeys():
-            start = possible_line_continuations[after_line_end]
-            stop = (after_line_end[0]-1, after_line_end[1]-1)
-            if start != stop:
-                lines_x.extend(range(start[0] - 1, after_line_end[0]))
-                lines_y.extend(range(start[1] - 1, after_line_end[1]))
+
+def get_line_tokens(line_producer, start_token=None, ignore_these = ('\n', '')):
+    lineiter = iter(line_producer)
+    lineno = 0 
+    while True:
+        line = lineiter.next()
+        if line not in ignore_these:
+            yield lineno, line
+        lineno += 1
+
+def show_similiarities(filenames, get_tokens = get_line_tokens):
+    x_positions = []
+    y_positions = []
+    lines_x = []
+    lines_y = []
+    possible_line_continuations = {}
+    filename = filenames[0]
+    f = open(filename, 'r')
+    lines = list(get_tokens(f))
+
+    for xPos, first_line in lines[:-1]:
+        for yPos, second_line in lines[xPos+1:]:
+            if first_line == second_line:
+                if (xPos, yPos) in possible_line_continuations:
+                    possible_line_continuations[xPos + 1, yPos + 1] =\
+                    possible_line_continuations.pop((xPos, yPos))
+                else:
+                    possible_line_continuations[xPos + 1, yPos + 1] = (xPos, yPos)
+                x_positions.append(xPos)
+                y_positions.append(yPos)
+    for after_line_end in possible_line_continuations.iterkeys():
+        start = possible_line_continuations[after_line_end]
+        stop = (after_line_end[0]-1, after_line_end[1]-1)
+        if start != stop:
+            lines_x.extend(range(start[0] - 1, after_line_end[0]))
+            lines_y.extend(range(start[1] - 1, after_line_end[1]))
     plot(x_positions, y_positions, 'b.')
     plot(lines_x, lines_y, 'ro')
     show()
