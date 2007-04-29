@@ -5,7 +5,7 @@ matplotlib.use('TkAgg')
 from matplotlib.pylab import plot, show
 import sys
 import optparse
-
+import tokenize
 
 def get_line_tokens(line_producer, start_token=None, ignore_these = ('\n', '')):
     lineiter = iter(line_producer)
@@ -14,6 +14,20 @@ def get_line_tokens(line_producer, start_token=None, ignore_these = ('\n', '')):
         line = lineiter.next()
         if line not in ignore_these:
             yield lineno, line
+            print  lineno, line
+        lineno += 1
+
+def get_python_tokens(line_producer, start_token=None, ignore_these = ('\n', '')):
+    lineiter = iter(line_producer)
+    lineno = 0
+    for token in tokenize.generate_tokens(lineiter.next):
+        (tok_type,
+         tok_string,
+         tok_start,
+         tok_end,
+         tok_line) = token
+        yield lineno, tok_string
+        print lineno, tok_string
         lineno += 1
 
 def show_similiarities(filenames, get_tokens = get_line_tokens):
@@ -25,7 +39,6 @@ def show_similiarities(filenames, get_tokens = get_line_tokens):
     filename = filenames[0]
     f = open(filename, 'r')
     lines = list(get_tokens(f))
-
     for xPos, first_line in lines[:-1]:
         for yPos, second_line in lines[xPos+1:]:
             if first_line == second_line:
@@ -46,8 +59,12 @@ def show_similiarities(filenames, get_tokens = get_line_tokens):
     plot(lines_x, lines_y, 'ro')
     show()
 
+PARSERS = {
+            'text' : get_line_tokens,
+            'python' : get_python_tokens,
+          }
+
 if __name__ == '__main__':
-    
 
     from optparse import OptionParser
     usage = ("usage: %prog [options] filename [filenames]\n" +
@@ -55,9 +72,9 @@ if __name__ == '__main__':
              "If more than one file is specified, show duplicates " +
              "in all of them")
     parser = OptionParser(usage=usage)
-    available_parsers = ['text', 'python']
+    available_parsers = PARSERS.keys() 
     parser.add_option("-p", "--parser", dest="parse_with", type='choice',
-                      choices=available_parsers,
+                      choices=available_parsers, default='text',
                       help="specify parser to use\n%s" % available_parsers, metavar='PARSER')
     parser.add_option("-v", "--verbose",
                       action="store_true", dest="verbose", default=False,
@@ -67,7 +84,7 @@ if __name__ == '__main__':
     if not args:
         parser.print_help()
         sys.exit(2)
-    show_similiarities(args)
+    show_similiarities(args, get_tokens=PARSERS[options.parse_with])
 # vim: ts=4,et,sw=4
 
     
