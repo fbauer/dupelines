@@ -7,6 +7,14 @@ import sys
 import optparse
 import tokenize
 import itertools
+import time
+# try:
+#     import psyco
+#     print 'wheeeee!!'
+#     psyco.profile()
+# except ImportError:
+#     print 'no psyco'
+    
 
 def get_line_tokens(line_producer, start_token=None, ignore_these = ('\n', '')):
     lineiter = iter(line_producer)
@@ -28,39 +36,63 @@ def get_python_tokens(line_producer, start_token=None, ignore_these = ('\n', '')
          tok_end,
          tok_line) = token
         yield tok_start, tok_end, tok_string
-        print tok_string
 
 def similiar_tokens(filenames, get_tokens):
     files = [open(filename, 'r') for filename in filenames[0:]]
     tokens = []
     for f in files:
         tokens.extend(list(get_tokens(f)))
-    print len(files)
-    c =  itertools.chain([get_tokens(f) for f in files])
     lines = list(enumerate(tokens))
-    for xPos, x_token in lines[:-1]:
-        for yPos, y_token in lines[xPos+1:]:
-            (tok_start, tok_end, first_line) = x_token
-            (tok_start, tok_end, second_line) = y_token
-            if first_line == second_line:
-                yield xPos, x_token, yPos, y_token
-
+#     for xPos, x_token in lines[:-1]:
+#         for yPos, y_token in lines[xPos+1:]:
+#             (tok_start, tok_end, first_line) = x_token
+#             (tok_start, tok_end, second_line) = y_token
+#             if first_line == second_line:
+#                 yield xPos, x_token, yPos, y_token
+    all_toks = {}
+    for pos, (tok_start, tok_end, token) in lines:
+        if token in all_toks:
+            all_toks[token].append((pos, tok_start, tok_end))
+        else:
+            # we haven't seen this token before
+            all_toks[token] = [(pos, tok_start, tok_end)]
+    #for token, stuff in all_toks.iteritems():
+    #for token, stuff in all_toks.iteritems():
+    for xpos, (xstart, xend, token) in lines:
+        # we can pop the first element from all_toks[token]
+        # as it is xpos
+        stuff = all_toks[token][1:]
+        all_toks[token] = stuff
+        if stuff   and token not in ('\n', ''):
+            #for xpos, xstart, xend in stuff:
+            for ypos, ystart, yend in stuff:
+                assert ypos > xpos
+                print xpos, ypos
+                yield xpos, (xstart, xend, token), ypos, (ystart, yend, token)
+ 
 def show_similiarities(filenames, get_tokens = get_line_tokens, verbose=False):
+    
     x_positions = []
     y_positions = []
-
+    cand_start = cand_end = None
     #
     possible_line_continuations = {}
     for (xPos, (_, _, first_line),
          yPos, (_, _, second_line)) in similiar_tokens(filenames, get_tokens):
-                if (xPos, yPos) in possible_line_continuations:
-                    possible_line_continuations[xPos + 1, yPos + 1] =\
-                    possible_line_continuations.pop((xPos, yPos))
+                if (xPos, yPos) == cand_end: 
+                    cand_end = (xPos+1, yPos+1)
                 else:
-                    possible_line_continuations[xPos + 1, yPos + 1] = (xPos, yPos)
+                    if cand_end and (cand_end[0] - cand_start[0] > 1):
+                        possible_line_continuations[(cand_end[0]+1,cand_end[1]+1)] = cand_start
+                    cand_start = (xPos, yPos)
+                    cand_end = (xPos+1, yPos+1)
+
+                #print 'Appending point'
                 x_positions.append(xPos)
                 y_positions.append(yPos)
-    make_plot(x_positions, y_positions, possible_line_continuations, verbose)
+    print 'done'
+    return x_positions, y_positions, possible_line_continuations
+
 
 def make_plot(x_positions, y_positions, possible_line_continuations, verbose=False):
     lines_x = []
@@ -99,13 +131,13 @@ if __name__ == '__main__':
                       help="print additional informations to stderr")
 
     (options, args) = parser.parse_args()
-    print args
     if not args:
         parser.print_help()
         sys.exit(2)
-    show_similiarities(args, get_tokens=PARSERS[options.parse_with], verbose=options.verbose)
-
+    start_time = time.time()
+    x_positions, y_positions, possible_line_continuations = show_similiarities(
+                       args, get_tokens=PARSERS[options.parse_with], verbose=options.verbose)
+    stop_time = time.time()
+    print 'elapsed time %.2f seconds' % (stop_time - start_time)
+    make_plot(x_positions, y_positions, possible_line_continuations, verbose=options.verbose)
 # vim: ts=4 et sw=4
-
-    
-
